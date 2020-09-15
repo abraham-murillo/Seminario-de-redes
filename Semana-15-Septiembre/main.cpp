@@ -6,7 +6,7 @@ using namespace std;
 
 template <class T>
 void printHex(T x) {
-  // Imprime el número en hexadecimal a dos dígitos con salto de línea
+  // Imprime el número en hexadecimal a dos dígitos sin salto de línea
   cout << setfill('0') << setw(2) << hex << (0xff & (unsigned int)x);
 }
 
