@@ -2,12 +2,24 @@
 #include <fstream>
 #include <string>
 #include <iomanip>
+#include <map>
 using namespace std;
 
 template <class T>
 void printHex(T x) {
   // Imprime el número en hexadecimal a dos dígitos sin salto de línea
   cout << setfill('0') << setw(2) << hex << (0xff & (unsigned int)x);
+}
+
+string toHex(char* bytes, int size) { 
+  static string hex = "0123456789ABCDEF";
+  string ans;
+  for (int i = 0; i < size; ++i) {
+    const char ch = bytes[i];
+    ans += hex[(ch & 0xF0) >> 4];
+    ans += hex[ch & 0xF];
+  }
+  return ans;
 }
 
 int main() {
@@ -45,11 +57,13 @@ int main() {
     }
 
     {
+      map<string, string> mp = {{"0800", "IPv4"}, {"0806", "ARP"}, {"8035", "RARP"}, {"86DD", "IPv6"}};
       cout << "Tipo de código - ";
-      char x, y;
-      archivo.get(x), archivo.get(y);
-      printHex(x), printHex(y); // Pasar a los formatos de acuerdo a la tabla
-      cout << '\n';
+      char x[2];
+      for (int i = 0; i < 2; i++)
+        archivo.get(x[i]);
+      string codigo = toHex(x, 2);
+      cout << mp[codigo] << '\n';
     }
 
     {
