@@ -11,7 +11,7 @@ void printHex(T x) {
   cout << setfill('0') << setw(2) << hex << (0xff & (unsigned int)x);
 }
 
-string toHex(char* bytes, int size) { 
+string toHex(char* bytes, int size) {
   static string hex = "0123456789ABCDEF";
   string ans;
   for (int i = 0; i < size; ++i) {
@@ -63,7 +63,7 @@ int main() {
       for (int i = 0; i < 2; i++)
         archivo.get(x[i]);
       string codigo = toHex(x, 2);
-      cout << mp[codigo] << '\n';
+      cout << codigo << ' ' << mp[codigo] << '\n';
     }
 
     {
@@ -80,6 +80,6 @@ int main() {
   }
 
   archivo.close();
-  
+
   return 0;
 }
