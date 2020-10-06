@@ -32,6 +32,12 @@ struct Ipv4Header {
   uint32_t direccionIpDestino;
 };
 
+#pragma pack(1)
+struct ICMPv4 {
+    uint8_t tipo;
+    uint8_t codigo;
+    uint16_t checksum;
+};
 
 using namespace std;
 
@@ -59,12 +65,13 @@ void endswap(T *objp)
 }
 
 void analizaCabeceraIpv4(fstream* archivo);
+void analizaICMP(fstream* archivo);
 string uint32AIpString(uint32_t ip);
 
 int main() {
 
   // Archivo de entrada y salida para leer
-  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_icmp_ping_2.bin";
+  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_icmp_host_unreachable.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
@@ -106,7 +113,8 @@ int main() {
     }
 
     analizaCabeceraIpv4(&archivo);
-    
+    analizaICMP(&archivo);
+
     {
       char x;
       cout << "Datos - \n";
@@ -145,6 +153,37 @@ map<uint8_t, string> mapaDeProtocolo = {
   {121, "SMP"},
 };
 
+map<uint8_t, string> mapaTipoDeMensaje = {
+  {0, "Echo Reply"},
+  {3, "Destination Unreachable"},
+  {4, "Source Quench"},
+  {5, "Redirect"},
+  {8, "Echo"},
+  {11, "Time Exceeded"},
+  {12, "Parameter Problem"},
+  {13, "Timestamp"},
+  {14, "Timestamp Reply"},
+  {15, "Information Request"},
+  {16, "Information Request"},
+  {17, "Addressmask"},
+  {18, "Addressmask Reply"}
+};
+
+map<uint8_t, string> mapaCodigoError = {
+  {0, "No se puede llegara a la red"},
+  {1, "No se puede llegar al host"},
+  {2, "El destino no dispone del protocolo solicitado"},
+  {3, "No se puede llegar al puerto destino o la aplicación destino no está libre"},
+  {4, "Se necesita aplicar fragmentación, pero el flag correspondiente indica lo contrario"},
+  {5, "La ruta de origen no es correcta"},
+  {6, "No se conoce la red destino"},
+  {7, "No se conoce la host destino "},
+  {8, "El host origen está aislado"},
+  {9, "La comunicación con la red destino está prohibida por razones administrativas"},
+  {10, "La comunicación con el host destino está prohibida por razones administrativas"},
+  {11, "No se puede llegar a la red destino debido al Tipo de servicio"},
+  {12, "No se puede llegar al host destino debido al Tipo de servicio"}
+};
 
 void analizaCabeceraIpv4(fstream* archivo) {
   Ipv4Header leido ;
@@ -177,6 +216,16 @@ void analizaCabeceraIpv4(fstream* archivo) {
 
 }
 
+void analizaICMP(fstream* archivo)
+{
+    ICMPv4 leer;
+    endswap(&leer.codigo);
+    archivo -> read((char*)(&leer), sizeof(ICMPv4));
+    cout << "Tipo de mensaje: " << std::dec << +leer.tipo << " = " << mapaTipoDeMensaje[leer.tipo] << "\n";
+    cout << "Codigo de error: " << std::dec << +leer.codigo << " = " << mapaCodigoError[leer.codigo] << "\n";
+    cout << "Checksum: 0x" << std::hex << leer.checksum << "\n";
+}
+
 string uint32AIpString(uint32_t ip) {
   stringstream ss;
   ss << ((ip >> 24) & 0xFF) <<
@@ -185,4 +234,3 @@ string uint32AIpString(uint32_t ip) {
   "." << (ip & 0xFF);
   return ss.str();
 }
-
