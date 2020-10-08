@@ -71,7 +71,7 @@ string uint32AIpString(uint32_t ip);
 int main() {
 
   // Archivo de entrada y salida para leer
-  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_icmp_host_unreachable.bin";
+  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_icmp_network_unreachable.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
@@ -219,8 +219,8 @@ void analizaCabeceraIpv4(fstream* archivo) {
 void analizaICMP(fstream* archivo)
 {
     ICMPv4 leer;
-    endswap(&leer.codigo);
     archivo -> read((char*)(&leer), sizeof(ICMPv4));
+    endswap(&leer.checksum);
     cout << "Tipo de mensaje: " << std::dec << +leer.tipo << " = " << mapaTipoDeMensaje[leer.tipo] << "\n";
     cout << "Codigo de error: " << std::dec << +leer.codigo << " = " << mapaCodigoError[leer.codigo] << "\n";
     cout << "Checksum: 0x" << std::hex << leer.checksum << "\n";
