@@ -40,6 +40,16 @@ struct Ipv4Header {
 };
 
 #pragma pack(1)
+struct Ipv6Header {
+  uint32_t primeraParte; 
+  uint16_t tamanoDatos;
+  uint8_t encabezadoSiguiente;
+  uint8_t limiteDeSalto;
+  uint8_t direccionOrigen[16];
+  uint8_t direccionDestino[16];
+};
+
+#pragma pack(1)
 struct ICMPv4 {
     uint8_t tipo;
     uint8_t codigo;
@@ -75,6 +85,7 @@ using namespace std;
 template <class T>
 void printHex(T x) {
   // Imprime el número en hexadecimal a dos dígitos sin salto de línea
+  
   cout << setfill('0') << setw(2) << hex << (0xff & (unsigned int)x);
 }
 
@@ -99,11 +110,12 @@ void analizaCabeceraIpv4(fstream* archivo);
 void analizaICMP(fstream* archivo);
 void analizaARP(fstream* archivo);
 string uint32AIpString(uint32_t ip);
+void analizaCabeceraIpv6(fstream* archivo);
+string I28ByteAIpv6String(uint8_t* ip);
 
-int main() {
-
+int main() {  
   // Archivo de entrada y salida para leer
-  const string nombreArchivo = "Paquetes-redes/ethernet_3.bin";
+  const string nombreArchivo = "Paquetes-redes/ipv6_icmpv6_hop_limit.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
@@ -152,7 +164,11 @@ int main() {
         case ARP:
           analizaARP(&archivo);
           break;
+        case IPv6:
+          analizaCabeceraIpv6(&archivo);
+          break;
         default:
+          cout << "Desconocido" << endl;
           break;
       }
     }
@@ -358,6 +374,32 @@ void analizaARP(fstream* archivo)
   cout << "Direccion IP receptor - " << uint32AIpString(lee.direccionIPReceptor) << "\n";
 }
 
+void printIpV6(uint8_t* first) {
+  cout << "\n";
+  for(int i = 0; i < 128; i++){
+    cout << std::dec;
+    cout << (int)first[i] << ",";
+  }
+  cout << "\n";
+}
+
+
+void analizaCabeceraIpv6(fstream* archivo) {
+  Ipv6Header leido ;
+  archivo->read((char*)(&leido), sizeof(Ipv6Header));
+  endswap(&leido.primeraParte);
+  endswap(&leido.tamanoDatos);
+  cout << "Version: " << (leido.primeraParte >> 28) << "\n";
+  cout << "Tipo de servicio: " << mapaDeTipoServicio[((leido.primeraParte >> 20) & 0xFF)] << "\n";
+  cout << "Etiqueta de flujo: " << std::dec << ((leido.primeraParte & 0xFFFFF)) << "\n";
+  cout << "Tamano de datos: " << std::dec << leido.tamanoDatos << "\n";
+  cout << "Encabezado siguiente: " << std::dec << (int)leido.encabezadoSiguiente << "\n";
+  cout << "Limite de salto: " << std::dec << (int)leido.limiteDeSalto << "\n";
+  cout << "Ipv6 Origen: " << I28ByteAIpv6String(leido.direccionOrigen) << "\n";
+  cout << "Ipv6 Destino: " << I28ByteAIpv6String(leido.direccionDestino) << "\n";
+}
+
+
 string uint32AIpString(uint32_t ip) {
   stringstream ss;
   ss << ((ip >> 24) & 0xFF) <<
@@ -366,3 +408,17 @@ string uint32AIpString(uint32_t ip) {
   "." << (ip & 0xFF);
   return ss.str();
 }
+
+string I28ByteAIpv6String(uint8_t* ipv6) {
+  stringstream ss;
+  ss << std::hex;
+  for(int i = 0; i < 16; i++){
+    ss << std::setfill('0') << std::setw(2);
+    ss << (int)ipv6[i];
+    if (i % 2 == 1 && i != 15) {
+      ss << ":";
+    }
+  }
+  return ss.str();
+}
+
