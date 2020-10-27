@@ -115,7 +115,7 @@ string I28ByteAIpv6String(uint8_t* ip);
 
 int main() {  
   // Archivo de entrada y salida para leer
-  const string nombreArchivo = "Paquetes-redes/ipv6_icmpv6_igmp.bin";
+  const string nombreArchivo = "Paquetes-redes/ipv6_icmpv6_ping.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
@@ -390,7 +390,7 @@ void analizaCabeceraIpv6(fstream* archivo) {
   endswap(&leido.primeraParte);
   endswap(&leido.tamanoDatos);
   cout << "Version: " << (leido.primeraParte >> 28) << "\n";
-  cout << "Tipo de servicio: " << mapaDeTipoServicio[((leido.primeraParte >> 20) & 0xFF)] << "\n";
+  cout << "Tipo de servicio: " << ((leido.primeraParte >> 20) & 0xFF) << " = " << mapaDeTipoServicio[((leido.primeraParte >> 20) & 0xFF)] << "\n";
   cout << "Etiqueta de flujo: " << std::dec << ((leido.primeraParte & 0xFFFFF)) << "\n";
   cout << "Tamano de datos: " << std::dec << leido.tamanoDatos << "\n";
   cout << "Encabezado siguiente: " << std::dec << (int)leido.encabezadoSiguiente << " = " << mapaDeProtocolo[leido.encabezadoSiguiente] << "\n";
