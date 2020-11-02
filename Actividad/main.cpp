@@ -103,7 +103,7 @@ string uint32AIpString(uint32_t ip);
 int main() {
 
   // Archivo de entrada y salida para leer
-  const string nombreArchivo = "Paquetes-redes/ethernet_3.bin";
+  const string nombreArchivo = "Paquetes-redes/ipv6_icmpv6_ping.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
