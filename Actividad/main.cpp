@@ -40,6 +40,16 @@ struct Ipv4Header {
 };
 
 #pragma pack(1)
+struct Ipv6Header {
+  uint32_t primeraParte;
+  uint16_t tamanoDatos;
+  uint8_t encabezadoSiguiente;
+  uint8_t limiteDeSalto;
+  uint8_t direccionOrigen[16];
+  uint8_t direccionDestino[16];
+};
+
+#pragma pack(1)
 struct ICMPv4 {
     uint8_t tipo;
     uint8_t codigo;
@@ -70,11 +80,19 @@ struct ARPHeader{
   uint32_t direccionIPReceptor;
 };
 
+#pragma pack(1)
+struct ICMPv6{
+    uint8_t tipo;
+    uint8_t codigo;
+    uint16_t checksum;
+};
+
 using namespace std;
 
 template <class T>
 void printHex(T x) {
   // Imprime el número en hexadecimal a dos dígitos sin salto de línea
+
   cout << setfill('0') << setw(2) << hex << (0xff & (unsigned int)x);
 }
 
@@ -99,9 +117,11 @@ void analizaCabeceraIpv4(fstream* archivo);
 void analizaICMP(fstream* archivo);
 void analizaARP(fstream* archivo);
 string uint32AIpString(uint32_t ip);
+void analizaCabeceraIpv6(fstream* archivo);
+string I28ByteAIpv6String(uint8_t* ip);
+void analizaICMPv6(fstream* archivo);
 
 int main() {
-
   // Archivo de entrada y salida para leer
   const string nombreArchivo = "Paquetes-redes/ipv6_icmpv6_ping.bin";
   fstream archivo(nombreArchivo.c_str());
@@ -152,7 +172,12 @@ int main() {
         case ARP:
           analizaARP(&archivo);
           break;
+        case IPv6:
+          analizaCabeceraIpv6(&archivo);
+          analizaICMPv6(&archivo);
+          break;
         default:
+          cout << "Desconocido" << endl;
           break;
       }
     }
@@ -292,6 +317,38 @@ map<uint16_t, string> mapaTipoHardware = {
   {65535, "Reserved"}
 };
 
+map<uint8_t, string> mapaTipoDeError = {
+    {1, "Mensaje de destino inalcanzable"},
+    {2, "Mensaje de paquete demasiado grande"},
+    {3, "Time exceeded message"},
+    {4, "Mensaje de problema de par�metro"},
+    {128, "Mensaje del pedido de eco"},
+    {129, "Mensaje de respuesta de eco"},
+    {133, "Mensaje de solicitud del router"},
+    {134, "Mensaje de anuncio del router"},
+    {135, "Mensaje de solicitud vecino"},
+    {136, "Mensaje de anuncio de vecino"},
+    {137, "Reoriente el mensaje"}
+};
+
+map<uint8_t, string> mapaCodigo1 = {
+  {0, "No existe ruta destino"},
+  {1, "Comunicacion con el destino administrativamente prohibida"},
+  {2, "No asignado"},
+  {3, "Direccion inalcanzable"}
+};
+
+map<uint8_t, string> mapaCodigo3 = {
+    {0, "El limite de salto excedido"},
+    {1, "Tiempo de reensamble de fragmento excedido"}
+};
+
+map<uint8_t, string> mapaCodigo4 = {
+    {0, "El campo del encabezado erroneo encontro"},
+    {1, "El tipo siguiente desconocido del encabezado encontro"},
+    {2, "Opcion desconocida del IPv6 encontrada"}
+};
+
 void analizaCabeceraIpv4(fstream* archivo) {
   Ipv4Header leido ;
   archivo->read((char*)(&leido), sizeof(Ipv4Header));
@@ -358,11 +415,75 @@ void analizaARP(fstream* archivo)
   cout << "Direccion IP receptor - " << uint32AIpString(lee.direccionIPReceptor) << "\n";
 }
 
+void printIpV6(uint8_t* first) {
+  cout << "\n";
+  for(int i = 0; i < 128; i++){
+    cout << std::dec;
+    cout << (int)first[i] << ",";
+  }
+  cout << "\n";
+}
+
+
+void analizaCabeceraIpv6(fstream* archivo) {
+  Ipv6Header leido ;
+  archivo->read((char*)(&leido), sizeof(Ipv6Header));
+  endswap(&leido.primeraParte);
+  endswap(&leido.tamanoDatos);
+  cout << "Version: " << (leido.primeraParte >> 28) << "\n";
+  cout << "Tipo de servicio: " << ((leido.primeraParte >> 20) & 0xFF) << " = " << mapaDeTipoServicio[((leido.primeraParte >> 20) & 0xFF)] << "\n";
+  cout << "Etiqueta de flujo: " << std::dec << ((leido.primeraParte & 0xFFFFF)) << "\n";
+  cout << "Tamano de datos: " << std::dec << leido.tamanoDatos << "\n";
+  cout << "Encabezado siguiente: " << std::dec << (int)leido.encabezadoSiguiente << " = " << mapaDeProtocolo[leido.encabezadoSiguiente] << "\n";
+  cout << "Limite de salto: " << std::dec << (int)leido.limiteDeSalto << "\n";
+  cout << "Ipv6 Origen: " << I28ByteAIpv6String(leido.direccionOrigen) << "\n";
+  cout << "Ipv6 Destino: " << I28ByteAIpv6String(leido.direccionDestino) << "\n";
+}
+
+void analizaICMPv6(fstream* archivo)
+{
+    ICMPv6 leer;
+    archivo->read((char*)(&leer), sizeof(ICMPv6));
+    endswap(&leer.checksum);
+    cout << "Tipo: " << std::dec << +leer.tipo << " = " << mapaTipoDeError[leer.tipo] << endl;
+    cout << "Codigo: " << std::dec << +leer.codigo;
+
+    switch((int)leer.tipo)
+    {
+    case 1:
+        cout << " = " <<mapaCodigo1[leer.codigo] << endl;
+        break;
+    case 3:
+        cout << " = " << mapaCodigo3[leer.codigo] << endl;
+        break;
+    case 4:
+        cout << " = " << mapaCodigo4[leer.codigo] << endl;
+        break;
+    default:
+        cout << endl;
+        break;
+    }
+    cout << "Checksum: " << std::hex << leer.checksum << endl;
+}
+
 string uint32AIpString(uint32_t ip) {
   stringstream ss;
   ss << ((ip >> 24) & 0xFF) <<
   "." << ((ip >> 16) & 0xFF) <<
   "." << ((ip >> 8) & 0xFF) <<
   "." << (ip & 0xFF);
+  return ss.str();
+}
+
+string I28ByteAIpv6String(uint8_t* ipv6) {
+  stringstream ss;
+  ss << std::hex;
+  for(int i = 0; i < 16; i++){
+    ss << std::setfill('0') << std::setw(2);
+    ss << (int)ipv6[i];
+    if (i % 2 == 1 && i != 15) {
+      ss << ":";
+    }
+  }
   return ss.str();
 }
