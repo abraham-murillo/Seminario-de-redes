@@ -21,7 +21,7 @@ enum Protocolos {
   IPv4,
   ARP,
   RARP,
-  IPv6, 
+  IPv6,
   TCP
 };
 
@@ -192,7 +192,7 @@ map<uint16_t, string> mapaPuertos = {
   {143, "(IMAP - TCP)"},
   {443, "(HTTPS - TCP)"},
   {993, "(IMAP SSL - TCP)"},
-  {995, "(POP SSL - TCP)"}, 
+  {995, "(POP SSL - TCP)"},
   {1023, "(Puertos bien conocidos)"},
   {49151, "(Puertos registrados)"},
   {65535, "(Puertos dinámicos o privados)"}
@@ -355,7 +355,7 @@ int main() {
       map<string, string> mapaTipoProtocolo = {{"0800", "IPv4"}, {"0806", "ARP"}, {"8035", "RARP"}, {"86DD", "IPv6"}};
       map<string, Protocolos > mapaTipoProtocolo2 = {{"0800", IPv4}, {"0806", ARP}, {"8035", RARP}, {"86DD", IPv6}, {"x", TCP}};
       enum { ICMPv4 = 1, TCP = 6, UDP = 17, ICMPv6 = 58, STP = 118, SMP = 121 };
-      
+
       cout << "Tipo de código - ";
       char x[2];
       for (int i = 0; i < 2; i++)
@@ -532,15 +532,20 @@ void analizaICMPv6(fstream* archivo) {
 void analizaTCP(fstream* archivo) {
   TCPHeader lee;
   archivo -> read((char*)(&lee), sizeof(TCPHeader));
+  endswap(&lee.puertoOrigen);
+  endswap(&lee.puertoDestino);
+  endswap(&lee.numeroSecuencia);
+  endswap(&lee.ventanaRecepcion);
   endswap(&lee.checksum);
+  endswap(&lee.punteroUrgente);
   {
     map<uint16_t, string>::iterator it;
-    if (!mapaPuertos.count(lee.puertoOrigen)) 
+    if (!mapaPuertos.count(lee.puertoOrigen))
       lee.puertoOrigen = max<uint16_t>(1023, lee.puertoOrigen);
     it = mapaPuertos.lower_bound(lee.puertoOrigen);
     cout << "Puerto origen - " << std::dec << +lee.puertoOrigen << " " << it->second <<  "\n";
 
-    if (!mapaPuertos.count(lee.puertoDestino)) 
+    if (!mapaPuertos.count(lee.puertoDestino))
       lee.puertoDestino = max<uint16_t>(1023, lee.puertoDestino);
     it = mapaPuertos.lower_bound(lee.puertoDestino);
     cout << "Puerto destino - " << std::dec << +lee.puertoDestino << " " << it->second <<  "\n";
@@ -563,7 +568,7 @@ void analizaTCP(fstream* archivo) {
   cout << "FIN - " << std::dec << +lee.FIN << '\n';
 
   cout << "Ventana de recepción - " << std::dec << +lee.ventanaRecepcion << '\n';
-  cout << "Checksum - "; printHex(lee.checksum); cout << '\n';
+  cout << "Checksum - 0x" << std::hex << lee.checksum << "\n";
   cout << "Puntero urgente - " << std::dec << +lee.punteroUrgente << '\n';
 }
 
