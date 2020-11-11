@@ -286,6 +286,14 @@ struct TCPHeader {
   uint16_t punteroUrgente;
 };
 
+#pragma pack(1)
+struct UDPHeader {
+  uint16_t puertoOrigen;
+  uint16_t puertoDestino;
+  uint16_t longitudTotal;
+  uint16_t Checksum;
+};
+
 template <class T>
 void printHex(T x) {
   // Imprime el número en hexadecimal a dos dígitos sin salto de línea
@@ -317,17 +325,19 @@ void analizaCabeceraIpv6(fstream* archivo);
 string I28ByteAIpv6String(uint8_t* ip);
 void analizaICMPv6(fstream* archivo);
 void analizaTCP(fstream* archivo);
+void analizaUDP(fstream* achivo);
 
 int main() {
   // Archivo de entrada y salida para lee
-  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_tcp.bin";
+  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_udp_dns.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
     // Lee caracter por caracter mientras pueda lee = archivo.get(x)
     {
       char x;
-      cout << "Dirección MAC de origen - ";
+      cout << "\tPROTOCOLO ETHERNET\n";
+      cout << "Direccion MAC de origen - ";
       for (int i = 0; i < 6; i++) {
         if (i > 0) {
           cout << ":";
@@ -340,7 +350,7 @@ int main() {
 
     {
       char x;
-      cout << "Dirección MAC de destino - ";
+      cout << "Direccion MAC de destino - ";
       for (int i = 0; i < 6; i++) {
         if (i > 0) {
           cout << ":";
@@ -356,7 +366,7 @@ int main() {
       map<string, Protocolos > mapaTipoProtocolo2 = {{"0800", IPv4}, {"0806", ARP}, {"8035", RARP}, {"86DD", IPv6}, {"x", TCP}};
       enum { ICMPv4 = 1, TCP = 6, UDP = 17, ICMPv6 = 58, STP = 118, SMP = 121 };
 
-      cout << "Tipo de código - ";
+      cout << "Tipo de codigo - ";
       char x[2];
       for (int i = 0; i < 2; i++)
         archivo.get(x[i]);
@@ -373,6 +383,10 @@ int main() {
 
             case TCP:
               analizaTCP(&archivo);
+              break;
+
+            case UDP:
+              analizaUDP(&archivo);
               break;
 
             default:
@@ -424,6 +438,7 @@ Ipv4Header analizaCabeceraIpv4(fstream* archivo) {
   endswap(&lee.direccionIpOrigen);
   endswap(&lee.direccionIpDestino);
   endswap(&lee.banderas.numero);
+  cout << "\n\tPROTOCOLO IPv4\n";
   cout << "Version: " << +lee.version << "\n";
   cout << "Tamano cabecera: " << +lee.tamanoCabecera << " = " << std::dec << lee.tamanoCabecera * 32 << "bits = " << lee.tamanoCabecera * 8 << "bytes \n";
   cout << "Tipo de servicio: " << mapaDeTipoServicio[lee.prioridad] << "\n";
@@ -451,6 +466,7 @@ void analizaICMPv4(fstream* archivo) {
   ICMPv4 lee;
   archivo -> read((char*)(&lee), sizeof(ICMPv4));
   endswap(&lee.checksum);
+  cout << "\tPROTOCOLO ICMPv4\n";
   cout << "Tipo de mensaje: " << std::dec << +lee.tipo << " = " << mapaTipoDeMensaje[lee.tipo] << "\n";
   cout << "Codigo de error: " << std::dec << +lee.codigo << " = " << mapaCodigoError[lee.codigo] << "\n";
   cout << "Checksum: 0x" << std::hex << lee.checksum << "\n";
@@ -463,6 +479,7 @@ void analizaARP(fstream* archivo) {
   endswap(&lee.codOperacion);
   endswap(&lee.direccionIPEmisor);
   endswap(&lee.direccionIPReceptor);
+  cout << "\n\tPROTOCOLO ARP\n";
   cout << "Tipo de hardware - " << std::dec << +lee.tipoHardware << " = " << mapaTipoHardware[lee.tipoHardware] <<  "\n";
   cout << "Tipo de protocolo - "; printHex(lee.tipoProtocolo); printHex(lee.tipoProtocolo2); cout << "\n";
   cout << "Longitud de hardware - " << std::dec << +lee.dirHardware <<"\n";
@@ -494,6 +511,7 @@ void analizaCabeceraIpv6(fstream* archivo) {
   archivo->read((char*)(&lee), sizeof(Ipv6Header));
   endswap(&lee.primeraParte);
   endswap(&lee.tamanoDatos);
+  cout << "\tPROTOCOLO IPv6\n";
   cout << "Version: " << (lee.primeraParte >> 28) << "\n";
   cout << "Tipo de servicio: " << ((lee.primeraParte >> 20) & 0xFF) << " = " << mapaDeTipoServicio[((lee.primeraParte >> 20) & 0xFF)] << "\n";
   cout << "Etiqueta de flujo: " << std::dec << ((lee.primeraParte & 0xFFFFF)) << "\n";
@@ -508,8 +526,9 @@ void analizaICMPv6(fstream* archivo) {
   ICMPv6 lee;
   archivo->read((char*)(&lee), sizeof(ICMPv6));
   endswap(&lee.checksum);
-  cout << "Tipo: " << std::dec << +lee.tipo << " = " << mapaTipoDeError[lee.tipo] << endl;
-  cout << "Codigo: " << std::dec << +lee.codigo;
+  cout << "\tPROTOCOLO ICMPv6\n";
+  cout << "Tipo - " << std::dec << +lee.tipo << " = " << mapaTipoDeError[lee.tipo] << endl;
+  cout << "Codigo - " << std::dec << +lee.codigo;
 
   switch((int)lee.tipo)
   {
@@ -526,7 +545,7 @@ void analizaICMPv6(fstream* archivo) {
       cout << endl;
       break;
   }
-  cout << "Checksum: " << std::hex << lee.checksum << endl;
+  cout << "Checksum - 0x" << std::hex << lee.checksum << endl;
 }
 
 void analizaTCP(fstream* archivo) {
@@ -538,6 +557,7 @@ void analizaTCP(fstream* archivo) {
   endswap(&lee.ventanaRecepcion);
   endswap(&lee.checksum);
   endswap(&lee.punteroUrgente);
+  cout << "\tPROTOCOLO TCP\n";
   {
     map<uint16_t, string>::iterator it;
     if (!mapaPuertos.count(lee.puertoOrigen))
@@ -570,6 +590,30 @@ void analizaTCP(fstream* archivo) {
   cout << "Ventana de recepción - " << std::dec << +lee.ventanaRecepcion << '\n';
   cout << "Checksum - 0x" << std::hex << lee.checksum << "\n";
   cout << "Puntero urgente - " << std::dec << +lee.punteroUrgente << '\n';
+}
+
+void analizaUDP(fstream* archivo) {
+  UDPHeader lee;
+  archivo -> read((char*)(&lee), sizeof(UDPHeader));
+  endswap(&lee.puertoOrigen);
+  endswap(&lee.puertoDestino);
+  endswap(&lee.longitudTotal);
+  endswap(&lee.Checksum);
+  cout << "\tPROTOCOLO UDP\n";
+  {
+    map<uint16_t, string>::iterator it;
+    if (!mapaPuertos.count(lee.puertoOrigen))
+      lee.puertoOrigen = max<uint16_t>(1023, lee.puertoOrigen);
+    it = mapaPuertos.lower_bound(lee.puertoOrigen);
+    cout << "Puerto origen - " << std::dec << +lee.puertoOrigen << " " << it->second <<  "\n";
+
+    if (!mapaPuertos.count(lee.puertoDestino))
+      lee.puertoDestino = max<uint16_t>(1023, lee.puertoDestino);
+    it = mapaPuertos.lower_bound(lee.puertoDestino);
+    cout << "Puerto destino - " << std::dec << +lee.puertoDestino << " " << it->second <<  "\n";
+  }
+  cout << "Longitud total - " << std::hex << lee.longitudTotal << "\n";
+  cout << "Checksum - 0x" << std::hex << lee.Checksum << "\n";
 }
 
 string uint32AIpString(uint32_t ip) {
