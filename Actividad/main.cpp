@@ -6,6 +6,16 @@
 #include <map>
 #include <algorithm>
 #define IPV4_HEADER_SIZE 20
+#define DNS_DEFAULT_PORT 53
+#define MAX_DNS_DOMAIN_SIZE 63
+
+#define A_TIPO_DNS 1
+#define CNAME_TIPO_DNS 5
+#define HINFO_TIPO_DNS 13
+#define MX_TIPO_DNS 15
+#define NS1_TIPO_DNS 22
+#define NS2_TIPO_DNS 23
+
 using namespace std;
 
 #pragma pack(1)
@@ -183,7 +193,7 @@ map<uint16_t, string> mapaPuertos = {
   {22, "(SSH - TCP)"},
   {23, "(TELNET - TCP)"},
   {25, "(SMTP - TCP)"},
-  {53, "(DNS - TCP/UDP)"},
+  {DNS_DEFAULT_PORT, "(DNS - TCP/UDP)"},
   {67, "(DHCP - UDP)"},
   {68, "(DHCP - UDP)"},
   {69, "(TFTP - UDP)"},
@@ -294,6 +304,18 @@ struct UDPHeader {
   uint16_t Checksum;
 };
 
+#pragma pack(1)
+struct DNSHeader {
+  uint16_t transactionId;
+  uint16_t flags;
+  uint16_t questionCount;
+  uint16_t answerCount;
+  uint16_t authorityRecordCount;
+  uint16_t additionalInformationCount;
+};
+
+
+
 template <class T>
 void printHex(T x) {
   // Imprime el número en hexadecimal a dos dígitos sin salto de línea
@@ -321,15 +343,19 @@ Ipv4Header analizaCabeceraIpv4(fstream* archivo);
 void analizaICMPv4(fstream* archivo);
 void analizaARP(fstream* archivo);
 string uint32AIpString(uint32_t ip);
-void analizaCabeceraIpv6(fstream* archivo);
-string I28ByteAIpv6String(uint8_t* ip);
+Ipv6Header analizaCabeceraIpv6(fstream* archivo);
+string I28BitAIpv6String(uint8_t* ip);
 void analizaICMPv6(fstream* archivo);
-void analizaTCP(fstream* archivo);
-void analizaUDP(fstream* achivo);
+TCPHeader analizaTCP(fstream* archivo);
+UDPHeader analizaUDP(fstream* achivo);
+void printFormattedBytes(char* bytes, int count);
+void analizaDNS(fstream* archivo);
+void analizaQuestion(fstream* archivo);
+void analizaAnswer(fstream* archivo);
 
 int main() {
   // Archivo de entrada y salida para lee
-  const string nombreArchivo = "Paquetes-redes/ethernet_ipv4_udp_dns.bin";
+  const string nombreArchivo = "Paquetes-redes/dns-test1.bin";
   fstream archivo(nombreArchivo.c_str());
 
   if (archivo.is_open()) {
@@ -380,15 +406,20 @@ int main() {
             case ICMPv4:
               analizaICMPv4(&archivo);
               break;
-
             case TCP:
-              analizaTCP(&archivo);
-              break;
-
+              {
+                TCPHeader resultado = analizaTCP(&archivo);
+                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                  analizaDNS(&archivo);
+                break;
+              }
             case UDP:
-              analizaUDP(&archivo);
-              break;
-
+              {
+                UDPHeader resultado = analizaUDP(&archivo);
+                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                  analizaDNS(&archivo);
+                break;
+              }
             default:
               cout << "Protocolo no encontrado\n";
               break;
@@ -401,10 +432,29 @@ int main() {
           break;
 
         case IPv6:
-          analizaCabeceraIpv6(&archivo);
-          analizaICMPv6(&archivo);
-          break;
-
+          {
+            Ipv6Header ipv6Header = analizaCabeceraIpv6(&archivo);
+            switch (ipv6Header.encabezadoSiguiente)
+            {
+              case TCP: {
+                TCPHeader resultado = analizaTCP(&archivo);
+                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                  analizaDNS(&archivo);
+                break;
+              }
+              case UDP:
+              {
+                UDPHeader resultado = analizaUDP(&archivo);
+                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                  analizaDNS(&archivo);
+                break;
+              }
+              case ICMPv6:
+                analizaICMPv6(&archivo);
+                break;
+            }
+            break;
+        }
         default:
           cout << "Desconocido" << endl;
           break;
@@ -506,7 +556,7 @@ void printIpV6(uint8_t* first) {
   cout << "\n";
 }
 
-void analizaCabeceraIpv6(fstream* archivo) {
+Ipv6Header analizaCabeceraIpv6(fstream* archivo) {
   Ipv6Header lee ;
   archivo->read((char*)(&lee), sizeof(Ipv6Header));
   endswap(&lee.primeraParte);
@@ -518,8 +568,9 @@ void analizaCabeceraIpv6(fstream* archivo) {
   cout << "Tamano de datos: " << std::dec << lee.tamanoDatos << "\n";
   cout << "Encabezado siguiente: " << std::dec << (int)lee.encabezadoSiguiente << " = " << mapaDeProtocolo[lee.encabezadoSiguiente] << "\n";
   cout << "Limite de salto: " << std::dec << (int)lee.limiteDeSalto << "\n";
-  cout << "Ipv6 Origen: " << I28ByteAIpv6String(lee.direccionOrigen) << "\n";
-  cout << "Ipv6 Destino: " << I28ByteAIpv6String(lee.direccionDestino) << "\n";
+  cout << "Ipv6 Origen: " << I28BitAIpv6String(lee.direccionOrigen) << "\n";
+  cout << "Ipv6 Destino: " << I28BitAIpv6String(lee.direccionDestino) << "\n";
+  return lee;
 }
 
 void analizaICMPv6(fstream* archivo) {
@@ -548,7 +599,7 @@ void analizaICMPv6(fstream* archivo) {
   cout << "Checksum - 0x" << std::hex << lee.checksum << endl;
 }
 
-void analizaTCP(fstream* archivo) {
+TCPHeader analizaTCP(fstream* archivo) {
   TCPHeader lee;
   archivo -> read((char*)(&lee), sizeof(TCPHeader));
   endswap(&lee.puertoOrigen);
@@ -563,7 +614,7 @@ void analizaTCP(fstream* archivo) {
     if (!mapaPuertos.count(lee.puertoOrigen))
       lee.puertoOrigen = max<uint16_t>(1023, lee.puertoOrigen);
     it = mapaPuertos.lower_bound(lee.puertoOrigen);
-    cout << "Puerto origen - " << std::dec << +lee.puertoOrigen << " " << it->second <<  "\n";
+    cout << " Puertoorigen - " << std::dec << +lee.puertoOrigen << " " << it->second <<  "\n";
 
     if (!mapaPuertos.count(lee.puertoDestino))
       lee.puertoDestino = max<uint16_t>(1023, lee.puertoDestino);
@@ -590,9 +641,12 @@ void analizaTCP(fstream* archivo) {
   cout << "Ventana de recepción - " << std::dec << +lee.ventanaRecepcion << '\n';
   cout << "Checksum - 0x" << std::hex << lee.checksum << "\n";
   cout << "Puntero urgente - " << std::dec << +lee.punteroUrgente << '\n';
+  return lee;
 }
 
-void analizaUDP(fstream* archivo) {
+
+
+UDPHeader analizaUDP(fstream* archivo) {
   UDPHeader lee;
   archivo -> read((char*)(&lee), sizeof(UDPHeader));
   endswap(&lee.puertoOrigen);
@@ -614,6 +668,107 @@ void analizaUDP(fstream* archivo) {
   }
   cout << "Longitud total - " << std::hex << lee.longitudTotal << "\n";
   cout << "Checksum - 0x" << std::hex << lee.Checksum << "\n";
+  return lee;
+}
+
+void analizaDNS(fstream* archivo) {
+  cout << "DNS";
+  DNSHeader readedDnsHeader;
+  archivo->read((char*) &readedDnsHeader, sizeof(DNSHeader));
+  for (int i = 0; i < 6; i++) {
+    endswap(&((uint16_t*) &readedDnsHeader)[i]);
+  }
+  cout << "\n\nPreguntas: \n\n\n";
+  for (int i = 0; i < readedDnsHeader.questionCount; i++) {
+    analizaQuestion(archivo);
+    cout << "\n\n";
+  }
+  cout << "\n\nRespuestas: \n\n\n";
+  for (int i = 0; i < readedDnsHeader.answerCount; i++) {
+    analizaAnswer(archivo);
+    cout << "\n\n";
+  }
+}
+
+void printVariableLengthString(fstream* archivo) {
+  char questionDomainName[MAX_DNS_DOMAIN_SIZE];
+  char size = 0;
+  int count = 1;
+  while (true) {
+    archivo->get(size);
+    if (!size) {
+      break;
+    }
+    archivo->read(questionDomainName, size);
+    questionDomainName[size] = '\0';
+    cout << "Parte " << count << ": ";
+    cout << questionDomainName << "\n";
+    count ++;
+  }
+}
+
+void analizaQuestion(fstream* archivo) {
+  cout << "Nombre de dominio: ";
+  printVariableLengthString(archivo);
+  uint16_t tipo;
+  uint16_t clase;
+  archivo->read((char*)(&tipo), sizeof(uint16_t));
+  archivo->read((char*)(&clase), sizeof(uint16_t));
+  endswap(&tipo);
+  endswap(&clase);
+  
+  cout << "Tipo: " << tipo << "\n";
+  cout << "Clase: " << clase << "\n";
+}
+
+void analizaAnswer(fstream* archivo) {
+  uint16_t punteroNombre;
+  uint16_t tipo;
+  uint16_t clase;
+  uint32_t tiempoDeVida;
+  uint32_t longitudDatos;
+  archivo->read((char*)(&punteroNombre), sizeof(uint16_t));
+  archivo->read((char*)(&tipo), sizeof(uint16_t));
+  archivo->read((char*)(&clase), sizeof(uint16_t));
+  archivo->read((char*)(&tiempoDeVida), sizeof(uint16_t));
+  archivo->read((char*)(&longitudDatos), sizeof(uint16_t));
+  
+  endswap(&tipo);
+  endswap(&clase);
+  cout << "Nombre de dominio: empieza en: " << punteroNombre << "\n";
+  cout << "Tipo: " << tipo << "\n";
+  cout << "Clase: " << clase << "\n";
+  cout << "Tiempo de vida en segundos: " << tiempoDeVida << "\n";
+  cout << "Longitud de datos: " << longitudDatos;
+  cout << "Datos registro dns: ";
+}
+
+void despliegaDatosRegistroDNS(fstream* archivo, uint16_t clase, uint16_t longitud) {
+  uint8_t datos[longitud + 1];
+  archivo->read((char*) datos, longitud);
+  if (clase == A_TIPO_DNS) {
+    if (longitud == 4) {
+      cout << uint32AIpString(*((uint32_t*) datos));
+    } else {
+      cout << I28BitAIpv6String(datos);
+    }
+  } else if (clase == CNAME_TIPO_DNS) {
+
+  }
+}
+
+//for debug
+void printFormattedBytes(char* bytes, int count) {
+  stringstream ss;
+  ss << std::hex;
+  for(int i = 0; i < count; i++){
+    ss << std::setfill('0') << std::setw(2);
+    ss << (int)bytes[i];
+    if (i != 15) {
+      ss << ",";
+    }
+  }
+  cout << ss.str();
 }
 
 string uint32AIpString(uint32_t ip) {
@@ -625,7 +780,7 @@ string uint32AIpString(uint32_t ip) {
   return ss.str();
 }
 
-string I28ByteAIpv6String(uint8_t* ipv6) {
+string I28BitAIpv6String(uint8_t* ipv6) {
   stringstream ss;
   ss << std::hex;
   for(int i = 0; i < 16; i++){
