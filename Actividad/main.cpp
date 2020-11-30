@@ -352,7 +352,7 @@ void printFormattedBytes(char* bytes, int count);
 void analizaDNS(fstream* archivo);
 void analizaQuestion(fstream* archivo);
 void analizaAnswer(fstream* archivo);
-
+void despliegaDatosRegistroDNS(fstream* archivo, uint16_t tipo, uint16_t longitud);
 int main() {
   // Archivo de entrada y salida para lee
   const string nombreArchivo = "Paquetes-redes/dns-test1.bin";
@@ -726,34 +726,46 @@ void analizaAnswer(fstream* archivo) {
   uint16_t tipo;
   uint16_t clase;
   uint32_t tiempoDeVida;
-  uint32_t longitudDatos;
+  uint16_t longitudDatos;
   archivo->read((char*)(&punteroNombre), sizeof(uint16_t));
   archivo->read((char*)(&tipo), sizeof(uint16_t));
   archivo->read((char*)(&clase), sizeof(uint16_t));
-  archivo->read((char*)(&tiempoDeVida), sizeof(uint16_t));
+  archivo->read((char*)(&tiempoDeVida), sizeof(uint32_t));
   archivo->read((char*)(&longitudDatos), sizeof(uint16_t));
   
   endswap(&tipo);
   endswap(&clase);
+  endswap(&tiempoDeVida);
+  endswap(&longitudDatos);
   cout << "Nombre de dominio: empieza en: " << punteroNombre << "\n";
   cout << "Tipo: " << tipo << "\n";
   cout << "Clase: " << clase << "\n";
   cout << "Tiempo de vida en segundos: " << tiempoDeVida << "\n";
-  cout << "Longitud de datos: " << longitudDatos;
+  cout << "Longitud de datos: " << longitudDatos << "\n";
   cout << "Datos registro dns: ";
+  despliegaDatosRegistroDNS(archivo, tipo, longitudDatos);
 }
 
-void despliegaDatosRegistroDNS(fstream* archivo, uint16_t clase, uint16_t longitud) {
+void despliegaDatosRegistroDNS(fstream* archivo, uint16_t tipo, uint16_t longitud) {
   uint8_t datos[longitud + 1];
   archivo->read((char*) datos, longitud);
-  if (clase == A_TIPO_DNS) {
+  datos[longitud] = '\0';
+  if (tipo == A_TIPO_DNS) {
     if (longitud == 4) {
-      cout << uint32AIpString(*((uint32_t*) datos));
+      uint32_t datos1 = *((uint32_t*) datos);
+      endswap(&datos1);
+      cout << uint32AIpString(datos1);
     } else {
       cout << I28BitAIpv6String(datos);
     }
-  } else if (clase == CNAME_TIPO_DNS) {
-
+  } else if (tipo == CNAME_TIPO_DNS) {
+    cout << datos;
+  } else if (tipo == HINFO_TIPO_DNS) {
+    cout << datos;
+  } else if (tipo == MX_TIPO_DNS) { 
+    cout << datos;
+  } else if (tipo == NS1_TIPO_DNS || tipo == NS2_TIPO_DNS) {
+    cout << datos;
   }
 }
 
