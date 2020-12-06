@@ -38,6 +38,20 @@ enum Protocolos {
 
 ////////////////////////////////////////////////////////////
 
+map<uint8_t, string> mapaDeTiposDeRegistroDNS = {
+  {A_TIPO_DNS, "A"},
+  {CNAME_TIPO_DNS, "CNAME"},
+  {HINFO_TIPO_DNS, "HINFO"},
+  {MX_TIPO_DNS, "MX"},
+  {NS1_TIPO_DNS, "NS"},
+  {NS2_TIPO_DNS, "NS"}
+};
+
+map<uint8_t, string> mapaDeClasesDNS = {
+  {1, "IN: Internet"},
+  {3, "CH: Sistema caotico"}
+};
+
 map<uint8_t, string> mapaDeTipoServicio = {
   {0b000, "0b000 De rutina"},
   {0b001, "0b001 Prioritario"},
@@ -353,7 +367,8 @@ void printFormattedBytes(char* bytes, int count);
 void analizaDNS(fstream* archivo);
 void analizaQuestion(fstream* archivo);
 void analizaAnswer(fstream* archivo);
-
+void despliegaDatosRegistroDNS(fstream* archivo, uint16_t tipo, uint16_t longitud);
+void imprimeBanderas(uint16_t flags);
 int main() {
   // Archivo de entrada y salida para lee
  
@@ -723,22 +738,63 @@ UDPHeader analizaUDP(fstream* archivo) {
 }
 
 void analizaDNS(fstream* archivo) {
-  cout << "DNS";
+  cout << "\nDNS";
   DNSHeader readedDnsHeader;
   archivo->read((char*) &readedDnsHeader, sizeof(DNSHeader));
   for (int i = 0; i < 6; i++) {
     endswap(&((uint16_t*) &readedDnsHeader)[i]);
   }
+  cout << "\nId: " << readedDnsHeader.transactionId << "\n";
+  cout << "Banderas: \n";
+  imprimeBanderas(readedDnsHeader.flags);
+  cout << "QDcount: " << readedDnsHeader.questionCount << "\n";
+  cout << "ANcount: " << readedDnsHeader.answerCount << "\n";
+  cout << "NScount: " << readedDnsHeader.authorityRecordCount << "\n";
+  cout << "ARcount: " << readedDnsHeader.additionalInformationCount << "\n";
+
   cout << "\n\nPreguntas: \n\n\n";
   for (int i = 0; i < readedDnsHeader.questionCount; i++) {
     analizaQuestion(archivo);
     cout << "\n\n";
   }
-  cout << "\n\nRespuestas: \n\n\n";
+  cout << "Respuestas: \n\n";
   for (int i = 0; i < readedDnsHeader.answerCount; i++) {
     analizaAnswer(archivo);
     cout << "\n\n";
   }
+}
+
+bool isBitSet(uint8_t num, int bit)
+{
+    return 1 == ( (num >> bit) & 1);
+}
+
+map<uint16_t, string> opCodeDNS = {
+  {0, "Consulta estandar (QUERY)"},
+  {1, "Consulta inversa (IQUERY)"},
+  {2, "Solicitud del estado del servidor (STATUS)"}
+};
+
+map<uint16_t, string> rCodeDNS = {
+  {0, "Ningun error"},
+  {1, "Error de formato"},
+  {2, "Fallo en el servidor"},
+  {3, "Error en nombre"},
+  {4, "No implementado"},
+  {5, "Rechazado"}
+};
+
+void imprimeBanderas(uint16_t flags) {
+  uint16_t opCode = (flags & 0b0111100000000000);
+  uint16_t rCode = (flags & 0b0000000000001111);
+  cout << "\tQR: " << (isBitSet(flags, 15) ? "Consulta" : "Respuesta") << "\n";
+  cout << "\tOp code: " << opCodeDNS[opCode] << "\n";
+  cout << "\tAA: " << (isBitSet(flags, 10) ? "Si" : "No") << "\n";
+  cout << "\tTC: " << (isBitSet(flags, 9) ? "Si": "No") << "\n";
+  cout << "\tRD: " << (isBitSet(flags, 8) ? "Si" : "No") << "\n";
+  cout << "\tRA: " << (isBitSet(flags, 7) ? "Si" : "No") << "\n";
+  cout << "\tZ: " << (flags & 0b0000000001110000) << "\n";
+  cout << "\tRcode: " << rCodeDNS[rCode] << "\n";
 }
 
 void printVariableLengthString(fstream* archivo) {
@@ -768,8 +824,10 @@ void analizaQuestion(fstream* archivo) {
   endswap(&tipo);
   endswap(&clase);
   
-  cout << "Tipo: " << tipo << "\n";
-  cout << "Clase: " << clase << "\n";
+  cout << "Tipo: " << tipo << " -> " << mapaDeTiposDeRegistroDNS[tipo] << "\n";
+  cout << "Clase: " << clase << " -> " << mapaDeClasesDNS[clase] << "\n";
+
+
 }
 
 void analizaAnswer(fstream* archivo) {
@@ -777,34 +835,46 @@ void analizaAnswer(fstream* archivo) {
   uint16_t tipo;
   uint16_t clase;
   uint32_t tiempoDeVida;
-  uint32_t longitudDatos;
+  uint16_t longitudDatos;
   archivo->read((char*)(&punteroNombre), sizeof(uint16_t));
   archivo->read((char*)(&tipo), sizeof(uint16_t));
   archivo->read((char*)(&clase), sizeof(uint16_t));
-  archivo->read((char*)(&tiempoDeVida), sizeof(uint16_t));
+  archivo->read((char*)(&tiempoDeVida), sizeof(uint32_t));
   archivo->read((char*)(&longitudDatos), sizeof(uint16_t));
   
   endswap(&tipo);
   endswap(&clase);
+  endswap(&tiempoDeVida);
+  endswap(&longitudDatos);
   cout << "Nombre de dominio: empieza en: " << punteroNombre << "\n";
-  cout << "Tipo: " << tipo << "\n";
-  cout << "Clase: " << clase << "\n";
+  cout << "Tipo: " << tipo << " -> " << mapaDeTiposDeRegistroDNS[tipo] << "\n";
+  cout << "Clase: " << clase << "-> " << mapaDeClasesDNS[clase] << "\n";
   cout << "Tiempo de vida en segundos: " << tiempoDeVida << "\n";
   cout << "Longitud de datos: " << longitudDatos << "\n";
   cout << "Datos registro dns: ";
+  despliegaDatosRegistroDNS(archivo, tipo, longitudDatos);
 }
 
-void despliegaDatosRegistroDNS(fstream* archivo, uint16_t clase, uint16_t longitud) {
+void despliegaDatosRegistroDNS(fstream* archivo, uint16_t tipo, uint16_t longitud) {
   uint8_t datos[longitud + 1];
   archivo->read((char*) datos, longitud);
-  if (clase == A_TIPO_DNS) {
+  datos[longitud] = '\0';
+  if (tipo == A_TIPO_DNS) {
     if (longitud == 4) {
-      cout << uint32AIpString(*((uint32_t*) datos));
+      uint32_t datos1 = *((uint32_t*) datos);
+      endswap(&datos1);
+      cout << uint32AIpString(datos1);
     } else {
       cout << I28BitAIpv6String(datos);
     }
-  } else if (clase == CNAME_TIPO_DNS) {
-
+  } else if (tipo == CNAME_TIPO_DNS) {
+    cout << datos;
+  } else if (tipo == HINFO_TIPO_DNS) {
+    cout << datos;
+  } else if (tipo == MX_TIPO_DNS) { 
+    cout << datos;
+  } else if (tipo == NS1_TIPO_DNS || tipo == NS2_TIPO_DNS) {
+    cout << datos;
   }
 }
 
