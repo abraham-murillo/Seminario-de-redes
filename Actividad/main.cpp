@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include "pcap.h"
 #define IPV4_HEADER_SIZE 20
 #define DNS_DEFAULT_PORT 53
 #define MAX_DNS_DOMAIN_SIZE 63
@@ -355,126 +356,176 @@ void analizaAnswer(fstream* archivo);
 
 int main() {
   // Archivo de entrada y salida para lee
-  const string nombreArchivo = "Paquetes-redes/dns-test1.bin";
-  fstream archivo(nombreArchivo.c_str());
+ 
+  char errbuf[PCAP_ERRBUF_SIZE];
+  pcap_if_t *alldevs;
+	pcap_if_t *d;
+  struct pcap_pkthdr hdr;
 
-  if (archivo.is_open()) {
-    // Lee caracter por caracter mientras pueda lee = archivo.get(x)
-    {
-      char x;
-      cout << "\tPROTOCOLO ETHERNET\n";
-      cout << "Direccion MAC de origen - ";
-      for (int i = 0; i < 6; i++) {
-        if (i > 0) {
-          cout << ":";
-        }
-        archivo.get(x);
-        printHex(x);
-      }
-      cout << '\n';
+  if(pcap_findalldevs(&alldevs, errbuf) == -1)
+	{
+		fprintf(stderr,"Error in pcap_findalldevs: %s\n", errbuf);
+		exit(1);
+	}
+	int i = 0;
+	/* Print the list */
+  cout << "Lista de dispositivos disponibles: \n";
+	for(d=alldevs; d; d=d->next)
+	{
+		printf("%d. %s", ++i, d->name);
+		if (d->description)
+			printf(" (%s)\n", d->description);
+		else
+			printf(" (No description available)\n");
+	}
+  int deviceToListen = 0;
+  cout << "Selecciona dispositivo para escuchar: ";
+  cin >> deviceToListen;
+  if (deviceToListen < 0 || deviceToListen > i) {
+    cout << "Nel :v";
+    return 1;
+  } 
+  d = alldevs;
+  for (int j = 0; j < deviceToListen - 1; j++) {
+    d = d->next;
+  }
+  pcap_t* pcapPointer;
+  cout << "Nombre del dispositivo seleccionado: " << d->name << "\n";
+  if ((pcapPointer = pcap_open_live(d->name, 65536, 0, 10000, errbuf)) == NULL) {
+    cout << "Error: ";
+    return 1;
+  }
+  const u_char *packetContent;
+  for (int k = 0; k < 10; k ++) {
+    cout << "********************** PAQUETE " <<  (k+1) << " **********************\n";
+    if ((packetContent = pcap_next(pcapPointer,&hdr))==NULL) {
+      cout << "Error pcap_next: " << "\n";
+      return 1;
     }
+    ofstream newfile("output.txt");
+    newfile.write((char*)(packetContent), hdr.len);
+    newfile.close();
+    fstream archivo("output.txt");
 
-    {
-      char x;
-      cout << "Direccion MAC de destino - ";
-      for (int i = 0; i < 6; i++) {
-        if (i > 0) {
-          cout << ":";
-        }
-        archivo.get(x);
-        printHex(x);
-      }
-      cout << '\n';
-    }
-
-    {
-      map<string, string> mapaTipoProtocolo = {{"0800", "IPv4"}, {"0806", "ARP"}, {"8035", "RARP"}, {"86DD", "IPv6"}};
-      map<string, Protocolos > mapaTipoProtocolo2 = {{"0800", IPv4}, {"0806", ARP}, {"8035", RARP}, {"86DD", IPv6}, {"x", TCP}};
-      enum { ICMPv4 = 1, TCP = 6, UDP = 17, ICMPv6 = 58, STP = 118, SMP = 121 };
-
-      cout << "Tipo de codigo - ";
-      char x[2];
-      for (int i = 0; i < 2; i++)
-        archivo.get(x[i]);
-      string tipoProtocolo = toHex(x, 2);
-      cout << tipoProtocolo << ' ' << mapaTipoProtocolo[tipoProtocolo] << '\n';
-
-      switch (mapaTipoProtocolo2[tipoProtocolo]) {
-        case IPv4: {
-          Ipv4Header ipv4Header = analizaCabeceraIpv4(&archivo);
-          switch (ipv4Header.protocolo) {
-            case ICMPv4:
-              analizaICMPv4(&archivo);
-              break;
-            case TCP:
-              {
-                TCPHeader resultado = analizaTCP(&archivo);
-                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
-                  analizaDNS(&archivo);
-                break;
-              }
-            case UDP:
-              {
-                UDPHeader resultado = analizaUDP(&archivo);
-                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
-                  analizaDNS(&archivo);
-                break;
-              }
-            default:
-              cout << "Protocolo no encontrado\n";
-              break;
+    if (archivo.is_open()) {
+      // Lee caracter por caracter mientras pueda lee = archivo.get(x)
+      {
+        char x;
+        cout << "\tPROTOCOLO ETHERNET\n";
+        cout << "Direccion MAC de origen - ";
+        for (int i = 0; i < 6; i++) {
+          if (i > 0) {
+            cout << ":";
           }
-          break;
+          archivo.get(x);
+          printHex(x);
         }
+        cout << '\n';
+      }
 
-        case ARP:
-          analizaARP(&archivo);
-          break;
+      {
+        char x;
+        cout << "Direccion MAC de destino - ";
+        for (int i = 0; i < 6; i++) {
+          if (i > 0) {
+            cout << ":";
+          }
+          archivo.get(x);
+          printHex(x);
+        }
+        cout << '\n';
+      }
 
-        case IPv6:
-          {
-            Ipv6Header ipv6Header = analizaCabeceraIpv6(&archivo);
-            switch (ipv6Header.encabezadoSiguiente)
-            {
-              case TCP: {
-                TCPHeader resultado = analizaTCP(&archivo);
-                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
-                  analizaDNS(&archivo);
+      {
+        map<string, string> mapaTipoProtocolo = {{"0800", "IPv4"}, {"0806", "ARP"}, {"8035", "RARP"}, {"86DD", "IPv6"}};
+        map<string, Protocolos > mapaTipoProtocolo2 = {{"0800", IPv4}, {"0806", ARP}, {"8035", RARP}, {"86DD", IPv6}, {"x", TCP}};
+        enum { ICMPv4 = 1, TCP = 6, UDP = 17, ICMPv6 = 58, STP = 118, SMP = 121 };
+
+        cout << "Tipo de codigo - ";
+        char x[2];
+        for (int i = 0; i < 2; i++)
+          archivo.get(x[i]);
+        string tipoProtocolo = toHex(x, 2);
+        cout << tipoProtocolo << ' ' << mapaTipoProtocolo[tipoProtocolo] << '\n';
+
+        switch (mapaTipoProtocolo2[tipoProtocolo]) {
+          case IPv4: {
+            Ipv4Header ipv4Header = analizaCabeceraIpv4(&archivo);
+            switch (ipv4Header.protocolo) {
+              case ICMPv4:
+                analizaICMPv4(&archivo);
                 break;
-              }
+              case TCP:
+                {
+                  TCPHeader resultado = analizaTCP(&archivo);
+                  if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                    analizaDNS(&archivo);
+                  break;
+                }
               case UDP:
-              {
-                UDPHeader resultado = analizaUDP(&archivo);
-                if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
-                  analizaDNS(&archivo);
-                break;
-              }
-              case ICMPv6:
-                analizaICMPv6(&archivo);
+                {
+                  UDPHeader resultado = analizaUDP(&archivo);
+                  if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                    analizaDNS(&archivo);
+                  break;
+                }
+              default:
+                cout << "Protocolo no encontrado\n";
                 break;
             }
             break;
+          }
+
+          case ARP:
+            analizaARP(&archivo);
+            break;
+
+          case IPv6:
+            {
+              Ipv6Header ipv6Header = analizaCabeceraIpv6(&archivo);
+              switch (ipv6Header.encabezadoSiguiente)
+              {
+                case TCP: {
+                  TCPHeader resultado = analizaTCP(&archivo);
+                  if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                    analizaDNS(&archivo);
+                  break;
+                }
+                case UDP:
+                {
+                  UDPHeader resultado = analizaUDP(&archivo);
+                  if (resultado.puertoDestino == DNS_DEFAULT_PORT || resultado.puertoOrigen == DNS_DEFAULT_PORT)
+                    analizaDNS(&archivo);
+                  break;
+                }
+                case ICMPv6:
+                  analizaICMPv6(&archivo);
+                  break;
+              }
+              break;
+          }
+          default:
+            cout << "Desconocido" << endl;
+            break;
         }
-        default:
-          cout << "Desconocido" << endl;
-          break;
       }
-    }
 
-    {
-      char x;
-      cout << "Datos - \n";
-      while (archivo.get(x)) {
-        printHex(x);
+      {
+        char x;
+        cout << "Datos - \n";
+        while (archivo.get(x)) {
+          printHex(x);
+        }
+        cout << '\n';
       }
-      cout << '\n';
+    } else {
+      cout << "Algo hiciste mal >:c\n";
+      return 1;
     }
-  } else {
-    cout << "Algo hiciste mal >:c\n";
-    return 1;
+    archivo.close();
   }
+ 
 
-  archivo.close();
 
   return 0;
 }
@@ -739,7 +790,7 @@ void analizaAnswer(fstream* archivo) {
   cout << "Tipo: " << tipo << "\n";
   cout << "Clase: " << clase << "\n";
   cout << "Tiempo de vida en segundos: " << tiempoDeVida << "\n";
-  cout << "Longitud de datos: " << longitudDatos;
+  cout << "Longitud de datos: " << longitudDatos << "\n";
   cout << "Datos registro dns: ";
 }
 
